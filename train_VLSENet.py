@@ -20,6 +20,7 @@ from torch import amp
 from PIL import Image
 from torch import nn
 from torch.optim import AdamW
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader, Dataset, random_split
 from torchvision import transforms
 from torchvision.transforms import InterpolationMode
@@ -670,6 +671,9 @@ def get_parser() -> argparse.ArgumentParser:
     parser.add_argument("--epochs", type=int, default=50)
     parser.add_argument("--lr", type=float, default=1e-4)
     parser.add_argument("--weight-decay", type=float, default=1e-4)
+    parser.add_argument("--scheduler", type=str, default="plateau", choices=["none", "plateau"], help="Learning rate scheduler")
+    parser.add_argument("--scheduler-patience", type=int, default=2, help="Plateau scheduler patience (epochs)")
+    parser.add_argument("--scheduler-factor", type=float, default=0.5, help="Plateau scheduler lr decay factor")
     parser.add_argument("--val-ratio", type=float, default=0.2)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--repro-lite", dest="repro_lite", action="store_true", default=True, help="More reproducible results with minimal impact (disables cudnn benchmark).")
@@ -842,6 +846,15 @@ def main() -> None:
     optimizer_param_groups = build_optimizer_param_groups(model, base_lr=args.lr)
     optimizer = AdamW(optimizer_param_groups, weight_decay=args.weight_decay)
 
+    scheduler = None
+    if args.scheduler == "plateau":
+        scheduler = ReduceLROnPlateau(
+            optimizer,
+            mode="max",
+            factor=args.scheduler_factor,
+            patience=args.scheduler_patience,
+        )
+
     best_dice = -1.0
     log_records: List[dict] = []
     epochs_without_improvement = 0
@@ -898,6 +911,9 @@ def main() -> None:
             total_epochs=args.epochs,
         )
         after_val = time.perf_counter()
+
+        if scheduler is not None:
+            scheduler.step(val_metrics["dice"])
 
         last_ckpt_path = report_dir / "last_text_guided_unet.pt"
         atomic_torch_save({
@@ -969,6 +985,9 @@ def main() -> None:
             "train_size": int(len(train_set)),
             "val_size": int(len(val_set)),
             "current_lr": float(optimizer.param_groups[0]["lr"]),
+            "scheduler": str(args.scheduler),
+            "scheduler_factor": float(args.scheduler_factor),
+            "scheduler_patience": int(args.scheduler_patience),
             "use_augmentation": bool(args.use_augmentation),
             "aug_hflip_prob": float(args.aug_hflip_prob),
             "aug_vflip_prob": float(args.aug_vflip_prob),
