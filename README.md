@@ -25,7 +25,7 @@ VLSE-Net addresses these challenges via **two complementary modules**:
 - **LSCM (Language-driven Semantic Calibration Module)**: injects text priors and cross-modal constraints to stabilise pore semantics under complex backgrounds.
 - **ASRM (Anisotropic Structure Refinement Module)**: applies direction-sensitive structural modelling and adaptive fusion to better recover elongated pores, weak boundaries, and locally connected structures.
 
-## Method Summary (from the paper)
+## Method Summary
 ### 1) Language-driven Semantic Calibration Module (LSCM)
 LSCM leverages the semantic space of a pre-trained vision-language model (CLIP) as an external knowledge anchor for the concept *“pore”*.
 
@@ -48,7 +48,7 @@ From the abstract in `paper/paper-en.tex`:
 - Porosity error is reduced by **39.6%** (relative reduction).
 - The model also shows stability across heterogeneous datasets.
 
-## Repository Layout (open-source code)
+## Repository Layout
 The open-source training and model code lives under `public/`:
 
 - `VLSENet.py`: VLSE-Net model implementation.
