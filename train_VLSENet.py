@@ -355,7 +355,7 @@ def evaluate(
         recalls.append(recall)
         porosity_errors.append(porosity_error)
 
-        # 只在最后一轮保存固定数量的可视化样本（80张）
+        # Only save a fixed number of visualization samples (80) in the last epoch.
         if save_visual_dir is not None and total_epochs is not None and epoch==total_epochs and total_saved < 80:
             remaining = 80 - total_saved
             total_saved += save_visualizations(

@@ -1,4 +1,3 @@
-# 仅跑验证：python train_unet.py ...（你训练时的 data/module/model flags）... --report-dir 训练输出目录 --eval-checkpoint 训练输出目录/best_unet.pt --compute-boundary-f1 --compute-cldice --boundary-f1-radius 2
 from __future__ import annotations
 
 import argparse
@@ -466,7 +465,7 @@ def evaluate(
         recalls.append(recall)
         porosity_errors.append(porosity_error)
 
-        # 只在最后一轮保存固定数量的可视化样本（80张）
+        # Only save a fixed number of visualization samples (80) in the last epoch.
         if save_visual_dir is not None and total_epochs is not None and epoch == total_epochs and total_saved < 80:
             remaining = 80 - total_saved
             total_saved += save_visualizations(
