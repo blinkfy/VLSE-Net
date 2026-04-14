@@ -1,4 +1,4 @@
-# Robust Pore Segmentation in Core SEM Images for Reservoir Microstructural Characterisation: Joint Modelling of Semantic Calibration and Directional Structure Refinement
+# Robust Pore Structure Segmentation of Core Samples for Reservoir Characterization Using SEM Images and a Semantically Guided Anisotropy-Aware Model
 
 ## Model Architecture
 The overall architecture of VLSE-Net consists of two core modules: **LSCM** (semantic calibration) and **ASRM** (anisotropic structural refinement).
