@@ -1,7 +1,7 @@
 # Robust Pore Structure Segmentation of Core Samples for Reservoir Characterization Using SEM Images and a Semantically Guided Anisotropy-Aware Model
 
 ## Model Architecture
-The overall architecture of VLSE-Net (vision-language guided structure-enhanced) consists of two core modules: **LSCM** (semantic calibration) and **ASRM** (anisotropic structural refinement).
+The overall architecture of VLSE-Net (vision-language guided structure-enhanced network) consists of two core modules: **LSCM** (semantic calibration) and **ASRM** (anisotropic structural refinement).
 
 <p align="center">
   <img src="figures/module.svg" width="900" alt="VLSE-Net overall architecture" />
