@@ -14,7 +14,7 @@ The overall architecture of VLSE-Net (vision-language guided structure-enhanced 
 
 ### ASRM (Anisotropic Structure Refinement Module)
 <p align="center">
-  <img src="figures/ASRM.svg" width="900" alt="ASRM module" />
+  <img src="figures/ASRM.svg" width="700" alt="ASRM module" />
 </p>
 
 ## Overview
