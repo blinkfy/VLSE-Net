@@ -1,4 +1,4 @@
-# SEM-Based Pore Segmentation for Microstructural Characterisation: A Semantically Guided Anisotropy-Aware Model
+# SEM-Based Pore Structure Segmentation for Reservoir characterisation Using Semantically Calibrated Anisotropy-Aware Model
 
 ## Model Architecture
 The overall architecture of VLSE-Net (vision-language guided structure-enhanced network) consists of two core modules: **LSCM** (semantic calibration) and **ASRM** (anisotropic structural refinement).
