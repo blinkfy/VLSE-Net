@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """
 Dynamic Snake Convolution Module (Pro Version)
-基于 DSCNet 论文的改进版蛇形卷积，使用 grid_sample + einops 实现。
-已优化：自动从输入张量检测设备，无需手动传入 device 参数。
+An improved version of snake convolution based on DSCNet paper, implemented using grid_stample+einops.
+Optimized: Automatically detects devices from input tensors without manually passing device parameters.
 """
 import torch
 from torch import nn
@@ -20,15 +20,15 @@ class DSConv_pro(nn.Module):
         if_offset: bool = True,
     ):
         """
-        动态蛇形卷积
+        Dynamic snake convolution
 
         Args:
-            in_channels: 输入通道数
-            out_channels: 输出通道数
-            kernel_size: 蛇形卷积核大小（默认9）
-            extend_scope: 偏移扩展范围（默认1.0）
-            morph: 卷积核形态，0=沿x轴，1=沿y轴
-            if_offset: 是否启用形变，False则为标准卷积核
+            in_channels: number of input channels
+            out_channels: number of output channels
+            kernel_size: Snake convolution kernel size (default 9)
+            extend_scope: Offset extension range (default 1.0)
+            morph: convolution kernel morphology, 0=along x-axis, 1=along y-axis
+            if_offset: Whether to enable deformation, False indicates a standard convolution kernel
         """
         super().__init__()
 
@@ -63,12 +63,12 @@ class DSConv_pro(nn.Module):
         )
 
     def forward(self, input: torch.Tensor):
-        # 预测偏移图，范围 [-1, 1]
+        # Predict offset map, range [-1,1]
         offset = self.offset_conv(input)
         offset = self.gn_offset(offset)
         offset = self.tanh(offset)
 
-        # 蛇形变形卷积
+        # Serpentine deformable convolution
         y_coordinate_map, x_coordinate_map = get_coordinate_map_2D(
             offset=offset,
             morph=self.morph,
@@ -97,16 +97,14 @@ def get_coordinate_map_2D(
     extend_scope: float = 1.0,
 ):
     """
-    根据偏移量计算2D坐标映射
-
-    Args:
-        offset: 网络预测的偏移量 [B, 2*K, W, H]
-        morph: 卷积核形态，0=沿x轴，1=沿y轴
-        extend_scope: 偏移扩展范围
-
-    Return:
-        y_coordinate_map: y轴坐标映射 [B, K_H * H, K_W * W]
-        x_coordinate_map: x轴坐标映射 [B, K_H * H, K_W * W]
+    Calculate 2D coordinate mapping based on the offset
+    Args: 
+        offset: The offset predicted by the network [B, 2*K, W, H] 
+        morph: The shape of the convolution kernel, 0=along x-axis, 1=along y-axis 
+        extend_scope: The range of offset expansion
+    Returns: 
+        y_coordinate_map: y-axis coordinate mapping [B, K_H * H, K_W * W] 
+        x_coordinate_map: x-axis coordinate mapping [B, K_H * H, K_W * W]
     """
     if morph not in (0, 1):
         raise ValueError("morph should be 0 or 1.")
@@ -196,16 +194,14 @@ def get_interpolated_feature(
     interpolate_mode: str = "bilinear",
 ):
     """
-    基于坐标映射对特征图进行插值采样
-
-    Args:
-        input_feature: 待插值特征图 [B, C, H, W]
-        y_coordinate_map: y轴坐标映射 [B, K_H * H, K_W * W]
-        x_coordinate_map: x轴坐标映射 [B, K_H * H, K_W * W]
-        interpolate_mode: 插值模式 'bilinear' 或 'bicubic'
-
-    Return:
-        interpolated_feature: 插值后的特征图 [B, C, K_H * H, K_W * W]
+    Interpolate and sample the feature map based on coordinate mapping
+    Args: 
+        input_feature: feature map to be interpolated [B, C, H, W] 
+        y_coordinate_map: y-axis coordinate mapping [B, K_H * H, K_W * W] 
+        x_coordinate_map: x-axis coordinate mapping [B, K_H * H, K_W * W] 
+        interpolate_mode: interpolation mode 'bilinear' or 'bicubic'
+    Return: 
+        interpolated_feature: interpolated feature map [B, C, K_H * H, K_W * W]
     """
     if interpolate_mode not in ("bilinear", "bicubic"):
         raise ValueError("interpolate_mode should be 'bilinear' or 'bicubic'.")
@@ -239,15 +235,13 @@ def _coordinate_map_scaling(
     target: list = [-1, 1],
 ):
     """
-    将坐标映射从原始范围缩放到目标范围（默认 [-1, 1]），适配 grid_sample
-
-    Args:
-        coordinate_map: 待缩放的坐标映射
-        origin: 原始值范围 [min, max]
-        target: 目标值范围，默认 [-1, 1]
-
-    Return:
-        coordinate_map_scaled: 缩放后的坐标映射
+    Scale the coordinate mapping from the original range to the target range (default [-1, 1]), adapting to grid_sample
+    Args: 
+        coordinate_map: The coordinate mapping to be scaled 
+        origin: The original value range [min, max] 
+        target: The target value range, default [-1, 1]
+    Return: 
+        coordinate_map_scaled: scaled coordinate mapping
     """
     min, max = origin
     a, b = target
