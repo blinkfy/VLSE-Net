@@ -212,30 +212,45 @@ Please refer to the training scripts for all available options.
 
 ---
 
-# Inference
+## Inference
 
-VLSE-Net takes SEM images and corresponding text prompts as input and produces binary pore segmentation masks.
+VLSE-Net supports inference on SEM images to generate binary pore segmentation masks.
 
-Input:
+The released inference script applies the complete VLSE-Net architecture, including the Language-Driven Semantic Calibration Module (LSCM) and the Anisotropy-Aware Structural Refinement Module (ASRM).
 
-- SEM image
-- Text prompt
+### Run inference
 
-Output:
+Example command:
 
-- Binary pore mask
-
-Workflow:
-
+```bash
+python infer_VLSENet.py \
+    --image-dir ./demo/images \
+    --checkpoint ./checkpoints/best_VLSE-Net.pt \
+    --output-dir ./outputs \
+    --save-overlay
 ```
-SEM image
-    |
-    v
-VLSE-Net
-    |
-    v
-Binary pore mask
+
+Arguments:
+
+- `--image-dir`: directory containing input SEM images.
+- `--checkpoint`: trained VLSE-Net checkpoint.
+- `--output-dir`: directory for saving segmentation results.
+- `--save-overlay`: optionally save prediction overlays.
+
+The generated results are organized as follows:
+
+```text
+outputs/
+├── masks/
+│   ├── sample_001.png
+│   └── ...
+│
+└── overlay/
+    ├── sample_001.png
+    └── ...
 ```
+
+The predicted binary masks can be further used for pore-system descriptor analysis.
 
 ---
 
