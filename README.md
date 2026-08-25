@@ -1,90 +1,264 @@
-# SEM-Based Pore System Characterisation of Heterogeneous Reservoir Using Vision-Language Guided Anisotropy-Aware Segmentation
+# SEM-Based Pore System Characterisation of Heterogeneous Reservoir Rocks Using Vision-Language Guided Structure-Enhanced Segmentation
 
-## Model Architecture
-The overall architecture of VLSE-Net (vision-language guided structure-enhanced network) consists of two core modules: **LSCM** (semantic calibration) and **ASRM** (anisotropic structural refinement).
+This repository provides the official implementation of **VLSE-Net**, a vision-language guided segmentation framework for pore extraction from heterogeneous rock core SEM images.
+
+VLSE-Net is developed for SEM-based digital rock analysis and aims to improve pore-system characterisation by addressing two major challenges:
+
+1. **Pore–matrix semantic ambiguity** caused by heterogeneous mineral textures and similar grayscale appearances.
+2. **Structural discontinuity** of elongated pores and weak-boundary pore structures.
+
+The framework integrates two complementary modules:
+
+- **LSCM (Language-driven Semantic Calibration Module)**  
+  Introduces vision-language semantic priors and cross-modal constraints to improve pore–matrix discrimination.
+
+- **ASRM (Anisotropic Structure Refinement Module)**  
+  Applies direction-sensitive structural modelling and adaptive refinement to preserve elongated and connectivity-related pore structures.
+
+---
+
+# Model Architecture
 
 <p align="center">
-  <img src="figures/module.svg" width="900" alt="VLSE-Net overall architecture" />
+<img src="figures/module.svg" width="900" alt="VLSE-Net overall architecture">
 </p>
 
-### LSCM (Language-driven Semantic Calibration Module)
+
+## LSCM: Language-driven Semantic Calibration Module
+
 <p align="center">
-  <img src="figures/LSCM_module.svg" width="900" alt="LSCM module" />
+<img src="figures/LSCM_module.svg" width="900" alt="LSCM module">
 </p>
 
-### ASRM (Anisotropic Structure Refinement Module)
+LSCM introduces semantic information from a vision-language model to improve pore recognition under complex geological textures.
+
+Main components:
+
+- Text prior injection into visual features.
+- Token-level cross-modal interaction.
+- Region-level semantic alignment constraint.
+
+
+## ASRM: Anisotropic Structure Refinement Module
+
 <p align="center">
-  <img src="figures/ASRM.svg" width="700" alt="ASRM module" />
+<img src="figures/ASRM.svg" width="700" alt="ASRM module">
 </p>
 
-## Overview
-Accurate pore segmentation is a fundamental step in digital rock analysis and reservoir microstructural characterisation. In SEM images of rock cores, fluctuating imaging conditions, heterogeneous background textures, and anisotropic/elongated pore morphologies often cause (1) semantic ambiguity between pores and non-pore regions and (2) degraded structural continuity (boundary erosion, fragmentation, and spurious adhesions).
+ASRM improves structural representation for anisotropic pore morphologies.
 
-VLSE-Net addresses these challenges via **two complementary modules**:
+Main components:
 
-- **LSCM (Language-driven Semantic Calibration Module)**: injects text priors and cross-modal constraints to stabilise pore semantics under complex backgrounds.
-- **ASRM (Anisotropic Structure Refinement Module)**: applies direction-sensitive structural modelling and adaptive fusion to better recover elongated pores, weak boundaries, and locally connected structures.
+- Parallel directional branches for horizontal, vertical and isotropic patterns.
+- Adaptive spatial gating for feature fusion.
+- Residual refinement for structural continuity preservation.
 
-## Method Summary
-### 1) Language-driven Semantic Calibration Module (LSCM)
-LSCM leverages the semantic space of a pre-trained vision-language model (CLIP) as an external knowledge anchor for the concept *“pore”*.
+---
 
-Core components described in the paper include:
-- **Text prior injection** into visual features (multi-scale semantic modulation along bottleneck/decoder pathways).
-- **Fine-grained cross-modal interaction** (token-level cross-attention at the bottleneck).
-- **Region-level semantic alignment constraint** via an auxiliary alignment loss to encourage cross-modal consistency.
+# Installation
 
-### 2) Anisotropic Structure Refinement Module (ASRM)
-ASRM improves direction-sensitive representation for anisotropic pore structures by introducing multi-branch directional modelling and adaptive gating.
+## Environment
 
-Core ideas described in the paper include:
-- A compact representation is processed by **parallel directional branches** (horizontal/vertical/isotropic) to capture anisotropic patterns.
-- A lightweight **spatial gating network** produces location-adaptive fusion weights.
-- A controlled residual refinement stabilises training while enhancing structural continuity.
+The implementation was developed and tested with:
 
-## Results (highlights)
-From the abstract in `paper/paper-en.tex`:
-- On the main dataset, VLSE-Net improves Dice by **+3.12%** over a baseline U-Net.
-- Porosity error is reduced by **39.6%** (relative reduction).
-- The model also shows stability across heterogeneous datasets.
+- Python >= 3.10
+- PyTorch 2.5.1
+- torchvision 0.20.1
+- CUDA-compatible GPU
 
-## Repository Layout
-The open-source training and model code lives under `public/`:
+The experiments reported in the paper were conducted on:
 
-- `VLSENet.py`: VLSE-Net model implementation.
-- `train_VLSENet.py`: training script for VLSE-Net.
-- `train_unet.py`: baseline U-Net training script (for comparisons).
-- `clip/`: a lightweight CLIP implementation used by the model.
+- GPU: NVIDIA RTX 4090 (24 GB)
 
-## Quick Start
-### Environment
-Typical dependencies:
-- Python 3.10+
-- PyTorch + torchvision
-- numpy, pillow, tqdm
 
-### Dataset format
-`train_VLSENet.py` expects a dataset root with the following subfolders (configurable via CLI flags):
+## Install Dependencies
 
-- `patch_images/`: RGB images
-- `patch_mask/`: binary masks (grayscale)
-- `text/`: optional per-image text prompts (`<image_stem>.txt`)
+Create a virtual environment:
 
-### Train VLSE-Net
+```bash
+conda create -n vlsenet python=3.10
+conda activate vlsenet
+```
+
+Install required packages:
+
+```bash
+pip install -r requirements.txt
+```
+
+---
+
+# Dataset Availability
+
+The datasets used in this study include both private and public SEM datasets.
+
+## Private datasets
+
+The SCD-1 and SCD-2 datasets used in the paper are not publicly available due to data-use restrictions.
+
+## Public datasets
+
+The following datasets are publicly available from their original sources:
+
+- DRP-317
+- cigRockSEM
+
+Dataset preparation scripts are provided for converting SEM images and binary masks into the required training format.
+
+---
+
+# Repository Structure
+
+```
+VLSE-Net/
+│
+├── VLSENet.py              # VLSE-Net implementation
+├── train_VLSENet.py        # VLSE-Net training script
+├── unet.py                 # U-Net baseline implementation
+├── train_unet.py           # U-Net training script
+├── DSConv_pro.py           # Direction-aware convolution module
+├── feature_renorm.py       # Feature normalization utilities
+│
+├── clip/                   # CLIP-related components
+├── dataset/                # Dataset directory
+├── dataset_builder/        # Dataset preparation scripts
+├── figures/                # Model visualization files
+│
+├── requirements.txt
+├── LICENSE
+└── README.md
+```
+
+---
+
+# Dataset Format
+
+`train_VLSENet.py` expects the following directory structure:
+
+```
+dataset/
+│
+├── patch_images/
+│   ├── image_001.png
+│   └── ...
+│
+├── patch_mask/
+│   ├── image_001.png
+│   └── ...
+│
+└── text/
+    ├── image_001.txt
+    └── ...
+```
+
+Description:
+
+- `patch_images/`: SEM images.
+- `patch_mask/`: binary pore masks.
+- `text/`: image-specific text prompts for vision-language guidance.
+
+The image and text prompt files should have the same filename.
+
 Example:
+
+```
+image_001.png
+image_001.txt
+```
+
+---
+
+# Training
+
+## Train VLSE-Net
 
 ```bash
 python train_VLSENet.py \
-  --data-root ./dataset
+    --data-root ./dataset
 ```
 
-Notes:
-- Many model features are enabled by default in the public script (e.g., cross-attention text spatial mode, skip attention, multi-scale fusion, AMP when CUDA is available).
-- Learning-rate scheduling is supported via `--scheduler plateau` (default) which adapts LR based on validation Dice.
+## Train U-Net Baseline
 
-### Outputs
-Training outputs are written under `public/reports/` (run-specific folder), including:
-- `best_*.pt` / `last_*.pt` checkpoints
-- `training_log.csv` / `training_log.json`
-- optional validation visualisations
-- optional per-epoch training curves
+```bash
+python train_unet.py \
+    --data-root ./dataset
+```
+
+Training outputs include:
+
+- model checkpoints;
+- training logs;
+- validation results.
+
+---
+
+# Configuration Parameters
+
+Common parameters include:
+
+| Parameter | Description |
+|---|---|
+| `--data-root` | Dataset directory |
+| `--batch-size` | Training batch size |
+| `--lr` | Initial learning rate |
+| `--epochs` | Number of training epochs |
+| `--scheduler` | Learning-rate scheduler |
+
+Please refer to the training scripts for all available options.
+
+---
+
+# Inference
+
+VLSE-Net takes SEM images and corresponding text prompts as input and produces binary pore segmentation masks.
+
+Input:
+
+- SEM image
+- Text prompt
+
+Output:
+
+- Binary pore mask
+
+Workflow:
+
+```
+SEM image
+    |
+    v
+VLSE-Net
+    |
+    v
+Binary pore mask
+```
+
+---
+
+# Reproducibility
+
+This repository provides:
+
+- VLSE-Net implementation;
+- U-Net baseline implementation;
+- training scripts;
+- dataset preparation tools.
+
+Because of data-use restrictions, the original SCD-1 and SCD-2 datasets cannot be redistributed.
+
+---
+
+# Experimental Results
+
+On the main SEM dataset:
+
+- Dice score improvement: **+3.12 percentage points** over U-Net.
+- SEM-derived apparent porosity error reduction: **39.6%**.
+
+VLSE-Net also improves the reliability of pore-system descriptors, including local porosity, connectivity and connected-component density.
+
+---
+
+# License
+
+This project is released under the MIT License.
