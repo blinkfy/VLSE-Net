@@ -105,6 +105,10 @@ The following datasets are publicly available from their original sources:
 
 Dataset preparation scripts are provided for converting SEM images and binary masks into the required training format.
 
+## Dataset Text Generation
+
+The dataset_builder module is provided for generating vision-language prompts from image statistics. It is optional and not required for model training.
+
 ---
 
 # Repository Structure
