@@ -9,10 +9,10 @@ VLSE-Net is developed for SEM-based digital rock analysis and aims to improve po
 
 The framework integrates two complementary modules:
 
-- **LSCM (Language-driven Semantic Calibration Module)**  
+- **LSCM (Language-Driven Semantic Calibration Module)**  
   Introduces vision-language semantic priors and cross-modal constraints to improve pore–matrix discrimination.
 
-- **ASRM (Anisotropic Structure Refinement Module)**  
+- **ASRM (Anisotropy-Aware Structural Refinement Module)**  
   Applies direction-sensitive structural modelling and adaptive refinement to preserve elongated and connectivity-related pore structures.
 
 ---
@@ -23,8 +23,7 @@ The framework integrates two complementary modules:
 <img src="figures/module.svg" width="900" alt="VLSE-Net overall architecture">
 </p>
 
-
-## LSCM: Language-driven Semantic Calibration Module
+## LSCM: Language-Driven Semantic Calibration Module
 
 <p align="center">
 <img src="figures/LSCM_module.svg" width="900" alt="LSCM module">
@@ -38,8 +37,7 @@ Main components:
 - Token-level cross-modal interaction.
 - Region-level semantic alignment constraint.
 
-
-## ASRM: Anisotropic Structure Refinement Module
+## ASRM: Anisotropy-Aware Structural Refinement Module
 
 <p align="center">
 <img src="figures/ASRM.svg" width="700" alt="ASRM module">
@@ -70,7 +68,6 @@ The experiments reported in the paper were conducted on:
 
 - GPU: NVIDIA RTX 4090 (24 GB)
 
-
 ## Install Dependencies
 
 Create a virtual environment:
@@ -85,6 +82,8 @@ Install required packages:
 ```bash
 pip install -r requirements.txt
 ```
+
+The frozen CLIP-RN50 weights are downloaded automatically on first use if they are not already available in the local CLIP cache.
 
 ---
 
@@ -103,29 +102,32 @@ The following datasets are publicly available from their original sources:
 - DRP-317
 - cigRockSEM
 
-Dataset preparation scripts are provided for converting SEM images and binary masks into the required training format.
+Public datasets can be organized according to the directory structure below. The repository includes a small example subset of SEM images, binary masks and sample-specific textual prompts for functional testing.
 
 ## Dataset Text Generation
 
-The dataset_builder module is provided for generating vision-language prompts from image statistics. It is optional and not required for model training.
+Sample-specific textual prompts used in the reported experiments were generated offline from image-derived statistical reports using **Qwen3.5-Plus**. The generated prompts were stored before training and used as fixed auxiliary textual inputs for training, validation and testing.
+
+`dataset_builder` is not required when pre-generated text prompts are already available. It is provided to reproduce the offline prompt-construction procedure for prepared image patches. See [`dataset_builder/README.md`](dataset_builder/README.md) for details.
 
 ---
 
 # Repository Structure
 
-```
+```text
 VLSE-Net/
 │
 ├── VLSENet.py              # VLSE-Net implementation
 ├── train_VLSENet.py        # VLSE-Net training script
+├── infer_VLSENet.py        # VLSE-Net inference script
 ├── unet.py                 # U-Net baseline implementation
 ├── train_unet.py           # U-Net training script
 ├── DSConv_pro.py           # Direction-aware convolution module
 ├── feature_renorm.py       # Feature normalization utilities
 │
 ├── clip/                   # CLIP-related components
-├── dataset/                # Dataset directory
-├── dataset_builder/        # Dataset preparation scripts
+├── dataset/                # Small example dataset
+├── dataset_builder/        # Offline prompt-generation utilities
 ├── figures/                # Model visualization files
 │
 ├── requirements.txt
@@ -139,7 +141,7 @@ VLSE-Net/
 
 `train_VLSENet.py` expects the following directory structure:
 
-```
+```text
 dataset/
 │
 ├── patch_images/
@@ -159,16 +161,16 @@ Description:
 
 - `patch_images/`: SEM images.
 - `patch_mask/`: binary pore masks.
-- `text/`: image-specific text prompts for vision-language guidance.
+- `text/`: sample-specific textual prompts for vision-language guidance.
 
-The image and text prompt files should have the same filename.
+Image, mask and text files should share the same filename stem. For example:
 
-Example:
-
-```
+```text
 image_001.png
 image_001.txt
 ```
+
+The example files distributed in `dataset/` are intended for functional testing only and are not the complete SCD-1 or SCD-2 datasets.
 
 ---
 
@@ -194,6 +196,27 @@ Training outputs include:
 - training logs;
 - validation results.
 
+The small example dataset is not sufficient to reproduce the quantitative results reported in the paper. It is provided to check the released implementation and data format.
+
+## Quick Functional Check
+
+A one-epoch run can be used to verify the training-to-inference workflow:
+
+```bash
+python train_VLSENet.py \
+    --data-root ./dataset \
+    --epochs 1 \
+    --num-workers 0
+```
+
+For the first run, the best checkpoint is written to:
+
+```text
+reports/latest_run_text_guided_unet/best_text_guided_unet.pt
+```
+
+If that report directory already exists, the training script creates a suffixed run directory and prints the actual path.
+
 ---
 
 # Configuration Parameters
@@ -212,45 +235,43 @@ Please refer to the training scripts for all available options.
 
 ---
 
-## Inference
+# Inference
 
-VLSE-Net supports inference on SEM images to generate binary pore segmentation masks.
+VLSE-Net inference uses an SEM image together with its pre-generated sample-specific textual prompt and produces a binary pore segmentation mask. The language model used during offline prompt preparation is **not** called during inference.
 
-The released inference script applies the complete VLSE-Net architecture, including the Language-Driven Semantic Calibration Module (LSCM) and the Anisotropy-Aware Structural Refinement Module (ASRM).
+## Run Inference
 
-### Run inference
-
-Example command:
+After obtaining a checkpoint from `train_VLSENet.py`, run:
 
 ```bash
 python infer_VLSENet.py \
-    --image-dir ./demo/images \
-    --checkpoint ./checkpoints/best_VLSE-Net.pt \
-    --output-dir ./outputs \
-    --save-overlay
+    --image-dir ./dataset/patch_images \
+    --text-dir ./dataset/text \
+    --checkpoint ./reports/latest_run_text_guided_unet/best_text_guided_unet.pt \
+    --output-dir ./outputs
 ```
 
 Arguments:
 
 - `--image-dir`: directory containing input SEM images.
-- `--checkpoint`: trained VLSE-Net checkpoint.
-- `--output-dir`: directory for saving segmentation results.
-- `--save-overlay`: optionally save prediction overlays.
+- `--text-dir`: directory containing matching sample-specific `.txt` prompts.
+- `--checkpoint`: checkpoint produced by `train_VLSENet.py`.
+- `--output-dir`: directory for generated binary masks.
+
+Each image must have a non-empty text file with the same filename stem. Missing prompts are treated as an input error rather than silently replaced by a generic prompt.
 
 The generated results are organized as follows:
 
 ```text
 outputs/
-├── masks/
-│   ├── sample_001.png
-│   └── ...
-│
-└── overlay/
+└── masks/
     ├── sample_001.png
     └── ...
 ```
 
 The predicted binary masks can be further used for pore-system descriptor analysis.
+
+A trained checkpoint is not bundled with this repository. Use a checkpoint generated by the training script or provide a compatible VLSE-Net checkpoint.
 
 ---
 
@@ -260,10 +281,11 @@ This repository provides:
 
 - VLSE-Net implementation;
 - U-Net baseline implementation;
-- training scripts;
-- dataset preparation tools.
+- training and inference scripts;
+- a small example image/mask/text subset for functional testing;
+- offline prompt-construction utilities.
 
-Because of data-use restrictions, the original SCD-1 and SCD-2 datasets cannot be redistributed.
+Because of data-use restrictions, the original SCD-1 and SCD-2 datasets cannot be redistributed. The example subset is intended to validate the released workflow, not to reproduce the paper's reported quantitative metrics.
 
 ---
 
