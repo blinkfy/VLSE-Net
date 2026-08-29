@@ -1,219 +1,179 @@
 # dataset_builder
 
-`dataset_builder` is used to construct vision-language training text for core SEM pore segmentation. The pipeline does not send raw images to the language model. Instead, it first extracts structured statistical descriptors from the original image and then organizes those descriptors into a prompt that drives text generation for training or augmentation.
+`dataset_builder` reproduces the offline construction of sample-specific textual prompts used by VLSE-Net. It operates on **prepared SEM image patches** and does not upload raw images or masks to the language model. Instead, it extracts image-derived statistical descriptors locally, formats them as a structured report, and sends only that text report to an OpenAI-compatible language-model endpoint.
 
-## 1. Directory and Scripts
+The prompts used in the experiments reported in the paper were generated with **Qwen3.5-Plus** and stored before model training. They were then used as fixed auxiliary textual inputs for the training, validation and test sets. The language model is not part of VLSE-Net and is not called during model training or inference.
 
-### 1.1 Script Overview
+## 1. Scripts
 
-- `split_images.py`: splits the original image and its corresponding mask into patches using a fixed grid.
-- `compute_features.py`: extracts image-only statistical descriptors, including geometric, intensity, color, and structural information.
-- `prompt_builder.py`: formats the statistical descriptors into a structured prompt suitable for LLM input.
-- `llm_api.py`: calls an OpenAI-compatible API and submits only the prompt, returning a pore description.
-- `build_dataset.py`: runs feature extraction, prompt construction, and text generation in batch, producing `dataset/text/*.txt`.
-- `requirements.txt`: minimal dependency list.
+- `compute_features.py`: extracts image-derived statistical descriptors.
+- `prompt_builder.py`: formats the descriptors into the structured report sent to the language model.
+- `llm_api.py`: calls an OpenAI-compatible API and returns the generated pore description.
+- `build_dataset.py`: performs feature extraction, prompt construction and text generation in batch.
+- `requirements.txt`: dependencies required by this utility.
 
-### 1.2 Recommended Directory Layout
+The current release assumes that image and mask patches have already been prepared. It does not include the original image-splitting pipeline.
 
-Default input and output directories are:
+## 2. Expected Directory Layout
 
-- `dataset/patch_images/`: image patches
-- `dataset/patch_mask/`: mask patches
-- `dataset/text/`: generated text files
+From the repository root:
 
-Run the scripts from the repository root , for example:
-
-```python
-python dataset_builder/build_dataset.py ...
+```text
+dataset/
+├── patch_images/
+│   ├── image_001.png
+│   └── ...
+├── patch_mask/
+│   ├── image_001.png
+│   └── ...
+└── text/
+    ├── image_001.txt
+    └── ...
 ```
 
-or
+`build_dataset.py` pairs image and mask patches by filename. Mask content is not used to construct the statistical report and is not sent to the language model.
 
-```python
-python dataset_builder/build_dataset.py ...
+## 3. Installation
+
+Python 3.10+ is recommended. Install the builder-specific dependencies from the repository root:
+
+```bash
+pip install -r dataset_builder/requirements.txt
 ```
 
-## 2. Processing Pipeline
+The main VLSE-Net environment is installed separately with:
 
-The dataset construction pipeline follows four steps:
-
-1. Split the original image and mask into patch-level samples.
-2. Extract statistical descriptors from the original image only.
-3. Convert the descriptors into a paper-style structured prompt.
-4. Send the prompt to the LLM to generate a pore-structure description.
-
-Steps 2 to 4 are the core of this tool. The LLM receives structured statistics only and does not receive the raw image or mask.
-
-## 3. Installation and Dependencies
-
-### 3.1 Python Dependencies
-
-Python 3.10+ is recommended. Install the dependencies with:
-
-```python
+```bash
 pip install -r requirements.txt
 ```
 
-### 3.2 Model Service Configuration
+## 4. Language-Model Configuration
 
-OpenAI-compatible API settings must be provided through environment variables. A `.env` file is recommended under `dataset_builder/`.
+The utility uses an OpenAI-compatible API. Configure the service through environment variables or pass the model explicitly with `--model`.
 
-Required variable:
+Required:
 
 - `OPENAI_API_KEY`
+- `OPENAI_MODEL`, unless `--model` is supplied
 
-Optional variables:
+Optional:
 
-- `OPENAI_BASE_URL`: for self-hosted or proxy-compatible endpoints
-- `OPENAI_MODEL`: default model name when no command-line override is provided
+- `OPENAI_BASE_URL`: custom or self-hosted OpenAI-compatible endpoint
 
-Example `.env` file:
+Example `.env` configuration:
 
 ```env
-OPENAI_API_KEY=sk-xxxxx
+OPENAI_API_KEY=your-api-key
 OPENAI_BASE_URL=https://api.example.com
-OPENAI_MODEL=gpt-5.4-mini
+OPENAI_MODEL=<provider-specific-Qwen3.5-Plus-model-id>
 ```
 
-## 4. Statistical Feature Extraction
+**Paper reproduction.** The sample-specific prompts used in the reported experiments were generated with **Qwen3.5-Plus**. The exact API model identifier depends on the service provider, so the repository does not hard-code a provider-specific identifier. If neither `--model` nor `OPENAI_MODEL` is supplied, the script stops with an explicit error instead of silently switching to a different language model.
 
-`compute_features.py` is not a segmentation script. Its purpose is to compress each original image into a compact set of statistical descriptors suitable for language-model conditioning. The current feature set is organized into three levels:
+For custom datasets, another OpenAI-compatible language model may be selected explicitly. Such outputs should not be assumed to reproduce the prompts used in the paper.
 
-### 4.1 Geometry Level
+## 5. Processing Pipeline
+
+For each prepared image patch, the released pipeline performs three steps:
+
+1. Extract image-derived statistical descriptors locally.
+2. Convert the descriptors into a structured textual report.
+3. Send only that report to the configured language model and save the returned description as `<image_stem>.txt`.
+
+No ground-truth mask, manually specified pore boundary or other pixel-level annotation is used in prompt construction.
+
+## 6. Statistical Descriptors
+
+`compute_features.py` extracts the descriptors used by the released prompt-construction procedure.
+
+### Geometry
 
 - `width`
 - `height`
 
-These values preserve the basic spatial scale of the input patch.
+### Color and intensity
 
-### 4.2 Intensity and Color Level
-
-- RGB channel means: `red_mean`, `green_mean`, `blue_mean`
-- RGB channel standard deviations: `red_std`, `green_std`, `blue_std`
+- RGB means: `red_mean`, `green_mean`, `blue_mean`
+- RGB standard deviations: `red_std`, `green_std`, `blue_std`
 - Grayscale statistics: `mean_intensity`, `std_intensity`, `min_intensity`, `max_intensity`, `median_intensity`, `p10_intensity`, `p90_intensity`, `entropy`
 
-This level captures the overall brightness distribution, dispersion, and information entropy of the image, helping the model perceive global contrast between pore regions and background regions.
-
-### 4.3 Structural Level
+### Structure
 
 - `edge_density`
 - `gradient_strength`
 
-This level characterizes local texture variation, edge richness, and directional change, allowing the model to form an abstract impression of pore-structure complexity.
+Inspect one image locally with:
 
-### 4.4 Usage
-
-```python
-python dataset_builder/compute_features.py --image dataset/patch_images/example_1.png
+```bash
+python dataset_builder/compute_features.py \
+    --image dataset/patch_images/example_1.png
 ```
 
-The output is a JSON-formatted feature summary that can be inspected for a single sample.
+## 7. Prompt Construction
 
-## 5. Prompt Construction Principles
+`prompt_builder.py` organizes the descriptors into:
 
-`prompt_builder.py` organizes the descriptors into a three-part structure:
+1. sample identifier;
+2. geometry, color/intensity and structural statistics;
+3. instructions constraining the generated description.
 
-1. Sample identifier
-2. Hierarchical statistical summary
-3. Text-generation constraints
+The language model is asked to produce one concise description of approximately 15–25 words focusing on pore distribution, connectivity, shape and spatial heterogeneity. The prompt explicitly instructs the model not to infer unsupported rock type or visual details.
 
-The prompt is written in a paper-style format so that the LLM generates the description based only on statistical information rather than the image itself. The key constraints are:
+## 8. Batch Generation
 
-- generate text only from structured statistics
-- do not display or reference the image or mask
-- do not infer rock type when lithology is not provided
-- focus on pore distribution, pore connectivity, pore shape, and spatial heterogeneity
+Basic command:
 
-## 6. Batch Text Dataset Generation
-
-### 6.1 Basic Command
-
-```python
-python dataset_builder/build_dataset.py --patch-image-dir dataset/patch_images --patch-mask-dir dataset/patch_mask --text-dir dataset/text
+```bash
+python dataset_builder/build_dataset.py \
+    --patch-image-dir dataset/patch_images \
+    --patch-mask-dir dataset/patch_mask \
+    --text-dir dataset/text
 ```
 
-### 6.2 Common Arguments
+Common arguments:
 
-- `--patch-image-dir`: patch image directory
-- `--patch-mask-dir`: patch mask directory
-- `--text-dir`: output text directory
-- `--model`: override the default model name
-- `--workers`: number of parallel workers
-- `--no-resume`: disable resume mode
-- `--force`: overwrite existing outputs
-- `--error-log`: error log path
-- `--status-log`: status log path
-- `--max-retries`: maximum number of retries for a single sample
-- `--retry-delay`: base retry backoff in seconds
+- `--patch-image-dir`: prepared image-patch directory.
+- `--patch-mask-dir`: matching mask-patch directory used for pair validation.
+- `--text-dir`: output directory for generated `.txt` files.
+- `--model`: explicit API model identifier; overrides `OPENAI_MODEL`.
+- `--workers`: number of parallel API requests.
+- `--no-resume`: regenerate instead of skipping existing text files.
+- `--force`: overwrite existing outputs.
+- `--error-log`: custom JSONL error-log path.
+- `--status-log`: custom JSONL status-log path.
+- `--max-retries`: maximum retries for a failed request.
+- `--retry-delay`: base retry delay in seconds.
 
-### 6.3 Examples
+Example with four workers:
 
-Run with 4 workers:
-
-```python
-python dataset_builder/build_dataset.py --patch-image-dir dataset/patch_images --patch-mask-dir dataset/patch_mask --text-dir dataset/text --workers 4
+```bash
+python dataset_builder/build_dataset.py \
+    --patch-image-dir dataset/patch_images \
+    --patch-mask-dir dataset/patch_mask \
+    --text-dir dataset/text \
+    --workers 4
 ```
 
-Run with higher concurrency and more retries:
+Explicit model selection:
 
-```python
-python dataset_builder/build_dataset.py --patch-image-dir DRP-317/patch_images --patch-mask-dir DRP-317/patch_mask --text-dir DRP-317/text --workers 16 --max-retries 5 --retry-delay 2
+```bash
+python dataset_builder/build_dataset.py \
+    --model <provider-specific-model-id>
 ```
 
-Force regeneration:
+## 9. Output Files
 
-```python
-python dataset_builder/build_dataset.py --patch-image-dir dataset/patch_images --patch-mask-dir dataset/patch_mask --text-dir dataset/text --workers 4 --force
-```
+The output directory contains:
 
-Explicitly switch models:
+- `*.txt`: one sample-specific description per successfully processed image;
+- `status.jsonl`: generation status for each image/mask pair;
+- `errors.jsonl`: details for failed requests.
 
-```python
-python dataset_builder/build_dataset.py --model gpt-4o-mini
-```
+Existing `.txt` files are skipped by default. Use `--force` to regenerate them.
 
-## 7. Output Files
+## 10. Reproducibility Notes
 
-After a successful run, the `text_dir` will contain:
-
-- `*.txt`: pore-description text for each patch
-- `status.jsonl`: per-sample status records, including `generated-text`, `skipped`, and `failed`
-- `errors.jsonl`: error information for failed samples
-
-When resume mode is enabled, existing text files are skipped and will not be regenerated.
-
-## 8. Design Notes
-
-### 8.1 Why Only Statistics Are Sent
-
-This release of `dataset_builder` is intended for paper-associated code publication, so reproducibility, interpretability, and data usage boundaries are emphasized. The LLM input is therefore restricted to structured statistical information, and raw images or masks are not uploaded.
-
-### 8.2 Why Hierarchical Features Are Used
-
-The hierarchical design breaks image information into three levels that are easier for a language model to consume:
-
-- geometry provides a scale anchor
-- intensity and color provide global distribution constraints
-- structure provides texture and directional cues
-
-This makes the prompt more stable and more consistent with a paper-style, statistics-driven text-generation pipeline.
-
-### 8.3 Intended Use of Generated Text
-
-The generated descriptions can be used for:
-
-- vision-language joint training
-- ablation studies on text-prior injection
-- documenting the semantic calibration module in the paper
-
-## 9. Reproducibility Suggestions
-
-- Test `compute_features.py` and `build_dataset.py` on a small subset first.
-- Start with a small `--workers` value and increase it gradually.
-- If the API returns rate limits or transient failures, increase `--max-retries` and `--retry-delay`.
-- For strict reproduction, fix `OPENAI_MODEL` and the API service version.
-
-## 10. Notes
-
-- This tool only handles text dataset construction; it does not include evaluation logic for the image-splitting step itself.
-- Text quality depends heavily on the statistical features and prompt design. If you change the feature set later, update `prompt_builder.py` and this README accordingly.
+- The example prompts already distributed in `dataset/text/` can be used directly for training and inference; the language-model service is not required in that case.
+- To reproduce the paper's offline prompt-generation procedure, configure Qwen3.5-Plus explicitly and keep the API/model version fixed.
+- Prompt generation uses only locally extracted image statistics. Raw images and masks are not sent to the language model.
+- Generated text can vary if the service provider, model version or decoding implementation changes.
