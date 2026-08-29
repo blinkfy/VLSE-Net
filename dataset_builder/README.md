@@ -102,11 +102,11 @@ No ground-truth mask, manually specified pore boundary or other pixel-level anno
 - `edge_density`
 - `gradient_strength`
 
-Inspect one image locally with:
+Inspect one of the example images locally with:
 
 ```bash
 python dataset_builder/compute_features.py \
-    --image dataset/patch_images/example_1.png
+    --image dataset/patch_images/Boye5-1HF-ID-2_1_006-Mag-20000x-Scale-5um-Depth-3729.2m-crop_1.png
 ```
 
 ## 7. Prompt Construction
@@ -166,10 +166,9 @@ python dataset_builder/build_dataset.py \
 The output directory contains:
 
 - `*.txt`: one sample-specific description per successfully processed image;
-- `status.jsonl`: generation status for each image/mask pair;
-- `errors.jsonl`: details for failed requests.
+- `status.jsonl`: generation status for each image/mask pair.
 
-Existing `.txt` files are skipped by default. Use `--force` to regenerate them.
+If a request fails, `errors.jsonl` records the corresponding error details. Existing `.txt` files are skipped by default; use `--force` to regenerate them.
 
 ## 10. Reproducibility Notes
 
