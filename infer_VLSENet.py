@@ -1,12 +1,13 @@
-"""
-Inference script for VLSE-Net.
+"""Inference script for VLSE-Net.
 
-Generate pore segmentation masks from SEM images.
+Generate binary pore segmentation masks from SEM images using the
+sample-specific textual prompts prepared offline.
 
 Example:
 python infer_VLSENet.py \
-    --image-dir ./demo/images \
-    --checkpoint ./checkpoints/best_VLSE-Net.pt \
+    --image-dir ./dataset/patch_images \
+    --text-dir ./dataset/text \
+    --checkpoint ./reports/latest_run_text_guided_unet/best_text_guided_unet.pt \
     --output-dir ./outputs
 """
 
@@ -18,187 +19,128 @@ from PIL import Image
 from torchvision import transforms
 from tqdm import tqdm
 
-from VLSENet import VLSE_Net
+from VLSENet import VLSENet
 
 
-def parse_args():
+SUPPORTED_IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp"}
+IMAGE_SIZE = 512
+MASK_THRESHOLD = 0.5
 
-    parser = argparse.ArgumentParser(
-        description="Inference with VLSE-Net"
-    )
 
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Inference with VLSE-Net")
     parser.add_argument(
         "--image-dir",
-        type=str,
+        type=Path,
         required=True,
-        help="Input SEM image directory"
+        help="Directory containing input SEM images.",
     )
-
+    parser.add_argument(
+        "--text-dir",
+        type=Path,
+        required=True,
+        help="Directory containing sample-specific .txt prompts matched by filename stem.",
+    )
     parser.add_argument(
         "--checkpoint",
-        type=str,
+        type=Path,
         required=True,
-        help="VLSE-Net checkpoint path"
+        help="Path to a checkpoint produced by train_VLSENet.py.",
     )
-
     parser.add_argument(
         "--output-dir",
-        type=str,
-        default="./outputs",
-        help="Prediction output directory"
+        type=Path,
+        default=Path("./outputs"),
+        help="Directory for predicted binary masks.",
     )
-
-    parser.add_argument(
-        "--save-overlay",
-        action="store_true",
-        help="Save segmentation overlay"
-    )
-
     return parser.parse_args()
 
 
-def build_transform():
-
-    return transforms.Compose([
-        transforms.Resize((512,512)),
-        transforms.ToTensor()
-    ])
-
-
-def load_model(checkpoint, device):
-
-    model = VLSE_Net(
-        num_classes=1,
-        text_spatial_mode="cross_attention",
-        use_skip_attention=True,
-        multi_scale_fusion=True,
-        use_decoder_text_adapter=True,
-        use_directional_refine=True,
-        use_bottleneck_context=True,
-        use_decoder_directional_refine=True
+def build_transform() -> transforms.Compose:
+    return transforms.Compose(
+        [
+            transforms.Resize((IMAGE_SIZE, IMAGE_SIZE)),
+            transforms.ToTensor(),
+        ]
     )
 
 
-    state_dict = torch.load(
-        checkpoint,
-        map_location=device
-    )
+def load_model(checkpoint_path: Path, device: torch.device) -> VLSENet:
+    if not checkpoint_path.is_file():
+        raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
 
-    model.load_state_dict(
-        state_dict["model_state_dict"]
-    )
+    checkpoint = torch.load(checkpoint_path, map_location=device)
+    if not isinstance(checkpoint, dict) or "model_state_dict" not in checkpoint:
+        raise ValueError(
+            "Unsupported checkpoint format. Expected a dictionary containing "
+            "'model_state_dict' as produced by train_VLSENet.py."
+        )
 
+    model = VLSENet(num_classes=1)
+    model.load_state_dict(checkpoint["model_state_dict"])
     model.to(device)
-
     model.eval()
-
     return model
 
 
-
-def save_mask(mask, path):
-
-    mask = (
-        mask.cpu()
-        .numpy()
-        .squeeze()
-    )
-
-    mask = (mask > 0.5) * 255
-
-    Image.fromarray(
-        mask.astype("uint8")
-    ).save(path)
-
-
-
-def main():
-
-    args = parse_args()
-
-    device = (
-        "cuda"
-        if torch.cuda.is_available()
-        else "cpu"
-    )
-
-
-    output_dir = Path(args.output_dir)
-
-    mask_dir = output_dir / "masks"
-
-    mask_dir.mkdir(
-        parents=True,
-        exist_ok=True
-    )
-
-
-    if args.save_overlay:
-
-        overlay_dir = output_dir / "overlay"
-
-        overlay_dir.mkdir(
-            parents=True,
-            exist_ok=True
-        )
-
-
-    model = load_model(
-        args.checkpoint,
-        device
-    )
-
-
-    transform = build_transform()
-
+def collect_image_paths(image_dir: Path) -> list[Path]:
+    if not image_dir.is_dir():
+        raise NotADirectoryError(f"Image directory not found: {image_dir}")
 
     image_paths = sorted(
-        Path(args.image_dir).glob("*")
+        path
+        for path in image_dir.iterdir()
+        if path.is_file() and path.suffix.lower() in SUPPORTED_IMAGE_SUFFIXES
     )
+    if not image_paths:
+        raise RuntimeError(f"No supported image files found in: {image_dir}")
+    return image_paths
 
 
-    with torch.no_grad():
+def load_prompt(text_dir: Path, image_path: Path) -> str:
+    prompt_path = text_dir / f"{image_path.stem}.txt"
+    if not prompt_path.is_file():
+        raise FileNotFoundError(
+            f"Missing prompt for '{image_path.name}': expected {prompt_path}"
+        )
 
-        for image_path in tqdm(image_paths):
-
-            image = Image.open(
-                image_path
-            ).convert("RGB")
-
-
-            tensor = transform(image)
-
-            tensor = (
-                tensor
-                .unsqueeze(0)
-                .to(device)
-            )
+    prompt = prompt_path.read_text(encoding="utf-8").strip()
+    if not prompt:
+        raise ValueError(f"Prompt file is empty: {prompt_path}")
+    return prompt
 
 
-            # Default text prompt for pore extraction
-            prompt = ["pore"]
+def save_mask(probability: torch.Tensor, output_path: Path) -> None:
+    mask = probability.detach().cpu().numpy().squeeze()
+    mask = (mask > MASK_THRESHOLD).astype("uint8") * 255
+    Image.fromarray(mask).save(output_path)
 
 
-            prediction = model(
-                tensor,
-                prompt
-            )
+def main() -> None:
+    args = parse_args()
 
+    if not args.text_dir.is_dir():
+        raise NotADirectoryError(f"Text directory not found: {args.text_dir}")
 
-            probability = torch.sigmoid(
-                prediction
-            )
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    mask_dir = args.output_dir / "masks"
+    mask_dir.mkdir(parents=True, exist_ok=True)
 
+    model = load_model(args.checkpoint, device)
+    transform = build_transform()
+    image_paths = collect_image_paths(args.image_dir)
 
-            save_mask(
-                probability[0],
-                mask_dir / image_path.name
-            )
+    with torch.inference_mode():
+        for image_path in tqdm(image_paths, desc="Inference", unit="image"):
+            with Image.open(image_path) as image:
+                tensor = transform(image.convert("RGB")).unsqueeze(0).to(device)
 
+            prompt = load_prompt(args.text_dir, image_path)
+            logits = model(tensor, prompts=[prompt], text_input_mode="raw")
+            probability = torch.sigmoid(logits)
+            save_mask(probability[0], mask_dir / f"{image_path.stem}.png")
 
-    print(
-        "Inference finished."
-    )
+    print(f"Inference finished. Masks saved to: {mask_dir}")
 
 
 if __name__ == "__main__":
