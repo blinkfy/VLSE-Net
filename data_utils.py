@@ -203,7 +203,7 @@ def _resolve_manifest_entries(dataset: PoreDataset, entries: Iterable[str], labe
     if missing:
         preview = ", ".join(missing[:5])
         raise ValueError(
-            f"{len(missing)} entrie(s) in {label} manifest do not match the dataset. "
+            f"{len(missing)} manifest entry/entries in {label} do not match the dataset. "
             f"Examples: {preview}"
         )
     return resolved
