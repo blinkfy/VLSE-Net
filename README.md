@@ -2,6 +2,12 @@
 
 This repository provides the official implementation of **VLSE-Net**, a vision-language guided segmentation framework for pore extraction from heterogeneous rock core SEM images.
 
+## Authors
+
+Xinru Zhang, Yanfei Xu, Yachuan Li, Shaohua Cao, and Peigang Liu
+
+Corresponding author: **Peigang Liu**
+
 VLSE-Net is developed for SEM-based digital rock analysis and aims to improve pore-system characterisation by addressing two major challenges:
 
 1. **Pore–matrix semantic ambiguity** caused by heterogeneous mineral textures and similar grayscale appearances.
@@ -118,10 +124,11 @@ Sample-specific textual prompts used in the reported experiments were generated 
 VLSE-Net/
 │
 ├── VLSENet.py              # VLSE-Net implementation
-├── train_VLSENet.py        # VLSE-Net training script
+├── train_VLSENet.py        # VLSE-Net training/evaluation entry point
 ├── infer_VLSENet.py        # VLSE-Net inference script
 ├── unet.py                 # U-Net baseline implementation
-├── train_unet.py           # U-Net training script
+├── train_unet.py           # U-Net baseline training/evaluation entry point
+├── data_utils.py            # Dataset loading and split-manifest utilities
 ├── DSConv_pro.py           # Direction-aware convolution module
 ├── feature_renorm.py       # Feature normalization utilities
 │
@@ -129,6 +136,7 @@ VLSE-Net/
 ├── dataset/                # Small example dataset
 ├── dataset_builder/        # Offline prompt-generation utilities
 ├── figures/                # Model visualization files
+├── splits/                 # Split-manifest format documentation
 │
 ├── requirements.txt
 ├── LICENSE
@@ -139,7 +147,7 @@ VLSE-Net/
 
 # Dataset Format
 
-`train_VLSENet.py` expects the following directory structure:
+The training scripts expect the following directory structure:
 
 ```text
 dataset/
@@ -161,7 +169,7 @@ Description:
 
 - `patch_images/`: SEM images.
 - `patch_mask/`: binary pore masks.
-- `text/`: sample-specific textual prompts for vision-language guidance.
+- `text/`: sample-specific textual prompts used by VLSE-Net.
 
 Image, mask and text files should share the same filename stem. For example:
 
@@ -174,33 +182,73 @@ The example files distributed in `dataset/` are intended for functional testing 
 
 ---
 
+# Dataset Splitting and Paper Reproduction
+
+The experiments reported in the paper use a **70% / 15% / 15% train/validation/test split**. To prevent information leakage, partitioning is performed at the **original-image level** before patch assignment. For DRP-317, partitioning is performed at the slice level so that samples derived from the same source slice remain in the same subset.
+
+The released training scripts support this protocol through explicit split manifests:
+
+```text
+splits_for_run/
+├── train.txt
+├── val.txt
+└── test.txt
+```
+
+Each manifest contains one patch filename per line. The manifests must be prepared so that all patches originating from the same source image (or the same DRP-317 slice) are assigned to only one subset. The scripts validate that:
+
+- all three manifests are non-empty;
+- no sample appears in more than one subset;
+- every dataset sample is assigned exactly once;
+- every listed filename exists in the prepared dataset.
+
+For the private SCD-1/SCD-2 datasets, the source-level manifests are generated during dataset preparation and are not distributed because the underlying data are restricted. The manifest format is documented in [`splits/README.md`](splits/README.md).
+
+When `--split-dir` is omitted, the scripts create a deterministic **sample-level** 70/15/15 split using the supplied random seed. This fallback exists only for functional testing of public/example data and **must not be interpreted as the paper's source-level experimental split**.
+
+Each training run writes the exact allocation it used to `<report_dir>/splits/`, allowing the run to be audited or repeated.
+
+---
+
 # Training
 
 ## Train VLSE-Net
 
+For paper-protocol training with prepared source-level manifests:
+
 ```bash
 python train_VLSENet.py \
-    --data-root ./dataset
+    --data-root ./dataset \
+    --split-dir ./splits_for_run
 ```
+
+The public training entry point uses the released VLSE-Net configuration and sample-specific text prompts. It selects the best checkpoint using validation Dice and evaluates that checkpoint once on the held-out test subset.
 
 ## Train U-Net Baseline
 
+Use the **same split manifests** for the U-Net baseline:
+
 ```bash
 python train_unet.py \
-    --data-root ./dataset
+    --data-root ./dataset \
+    --split-dir ./splits_for_run
 ```
+
+Using identical manifests ensures that VLSE-Net and U-Net are compared on the same train/validation/test samples.
 
 Training outputs include:
 
-- model checkpoints;
-- training logs;
-- validation results.
+- best and last model checkpoints;
+- epoch-level training and validation logs;
+- the exact split manifests used by the run;
+- `summary.json`;
+- final held-out `test_metrics.json`.
 
 The small example dataset is not sufficient to reproduce the quantitative results reported in the paper. It is provided to check the released implementation and data format.
 
 ## Quick Functional Check
 
-A one-epoch run can be used to verify the training-to-inference workflow:
+The three released example samples are sufficient to exercise the complete train/validation/test code path:
 
 ```bash
 python train_VLSENet.py \
@@ -209,7 +257,9 @@ python train_VLSENet.py \
     --num-workers 0
 ```
 
-For the first run, the best checkpoint is written to:
+Without `--split-dir`, this command intentionally uses the deterministic sample-level fallback and is **not** a reproduction of the paper's experimental partition.
+
+For the first run, the best VLSE-Net checkpoint is written to:
 
 ```text
 reports/latest_run_text_guided_unet/best_text_guided_unet.pt
@@ -225,11 +275,14 @@ Common parameters include:
 
 | Parameter | Description |
 |---|---|
-| `--data-root` | Dataset directory |
-| `--batch-size` | Training batch size |
-| `--lr` | Initial learning rate |
-| `--epochs` | Number of training epochs |
-| `--scheduler` | Learning-rate scheduler |
+| `--data-root` | Prepared dataset directory |
+| `--split-dir` | Directory containing `train.txt`, `val.txt` and `test.txt` |
+| `--image-size` | Input image size; default `512` |
+| `--batch-size` | Training batch size; default `8` |
+| `--lr` | Initial learning rate; default `1e-4` |
+| `--epochs` | Maximum number of training epochs; default `50` |
+| `--seed` | Random seed used by the functional fallback split and training |
+| `--num-workers` | DataLoader worker count |
 
 Please refer to the training scripts for all available options.
 
@@ -281,7 +334,9 @@ This repository provides:
 
 - VLSE-Net implementation;
 - U-Net baseline implementation;
-- training and inference scripts;
+- matched train/validation/test handling for VLSE-Net and U-Net;
+- split-manifest validation for source-level experimental partitions;
+- training, held-out test evaluation and inference scripts;
 - a small example image/mask/text subset for functional testing;
 - offline prompt-construction utilities.
 
