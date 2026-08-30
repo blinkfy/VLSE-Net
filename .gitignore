@@ -1,0 +1,22 @@
+__pycache__/
+*.py[cod]
+*.so
+
+# Local environments and credentials
+.env
+dataset_builder/.env
+.venv/
+venv/
+
+# Training and inference outputs
+reports/
+outputs/
+*.pt
+*.pth
+*.ckpt
+
+# IDE and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
