@@ -215,7 +215,7 @@ def get_interpolated_feature(
     y_coordinate_map_ = torch.unsqueeze(y_coordinate_map_, dim=-1)
     x_coordinate_map_ = torch.unsqueeze(x_coordinate_map_, dim=-1)
 
-    # grid shape [B, H, W, 2]，其中 [:, :, :, 2] 对应 [x, y]
+    # Grid shape: [B, H, W, 2], where the last dimension stores [x, y].
     grid = torch.cat([x_coordinate_map_, y_coordinate_map_], dim=-1)
 
     interpolated_feature = nn.functional.grid_sample(
